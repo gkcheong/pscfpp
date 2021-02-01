@@ -1,0 +1,9 @@
+READ_W_RGRID
+in/omega.rf
+ITERATE          
+WRITE_W_BASIS out/omega.bf
+WRITE_W_RGRID out/omega.rf
+WRITE_C_BASIS out/rho.bf
+WRITE_C_RGRID out/rho.rf
+FINISH
+

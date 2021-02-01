@@ -122,6 +122,9 @@ namespace Pscf {
       double idemp(int i, int j); 
 
       double sum_inv();
+
+      bool athermal();
+
    private:
 
       DMatrix<double> chi_;
@@ -131,6 +134,8 @@ namespace Pscf {
       DMatrix<double> idemp_;
 
       double sum_inv_;
+      
+      bool athermal_;
 
    };
 
@@ -147,6 +152,9 @@ namespace Pscf {
 
    inline double ChiInteraction::sum_inv()
    {  return sum_inv_; }
+
+   inline bool ChiInteraction::athermal() 
+   { return athermal_; }
 
 } // namespace Pscf
 #endif

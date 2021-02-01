@@ -75,12 +75,12 @@ namespace Pspc
 
       int nStar = systemPtr_->basis().nStar();
       for (int i = 0; i < nMonomer; ++i) {
-         wArrays_[i].allocate(nStar);
-         dArrays_[i].allocate(nStar);
-         tempDev[i].allocate(nStar);
+         wArrays_[i].allocate(nStar - 1);
+         dArrays_[i].allocate(nStar - 1);
+         tempDev[i].allocate(nStar - 1);
       }
-      lagrangian_.allocate(nStar);
-      lWorkspace_.allocate(nStar);
+      lagrangian_.allocate(nStar - 1);
+      lWorkspace_.allocate(nStar - 1);
    }
 
    /*
@@ -106,9 +106,6 @@ namespace Pspc
 
       //upon input wFields are converted to wFieldsGrid automatically
       // Solve MDE for initial state
-      //std::cout<<"dump : "<<system().wFieldRGrid(1)[0]<<std::endl;
-      //std::cout<<"dump : "<<system().wFieldRGrid(2)[0]<<std::endl;
-      //std::cout<<"dump : "<<system().wFieldRGrid(0)[0]<<std::endl;
 
       
       //solverTimer.start();
@@ -117,9 +114,6 @@ namespace Pspc
 
       system().mixture().compute(system().wFieldsRGrid(),
                                     system().cFieldsRGrid());
-      //std::cout<<"cdump : "<<system().cFieldRGrid(1)[0]<<std::endl;
-      //std::cout<<"cdump : "<<system().cFieldRGrid(2)[0]<<std::endl;
-      //std::cout<<"cdump : "<<system().cFieldRGrid(0)[0]<<std::endl;
 
       now = Timer::now();
       solverTimer.stop(now);
@@ -275,49 +269,58 @@ namespace Pspc
          CpHists_.append((systemPtr_->unitCell()).parameters());
 
       for (int i = 0 ; i < systemPtr_->mixture().nMonomer(); ++i) {
-         for (int j = 0; j < systemPtr_->basis().nStar(); ++j) {
+         for (int j = 0; j < systemPtr_->basis().nStar() - 1; ++j) {
             tempDev[i][j] = 0;
          }
       }
 
-      //lagragian
-      for(int k = 0; k < systemPtr_->basis().nStar(); ++k) {
-         lagrangian_[k] = 0;
-         lWorkspace_[k] = 0;
-      }
+      if(systemPtr_->interaction().athermal()) {
+         //lagragian
+         for(int k = 0; k < systemPtr_->basis().nStar() - 1; ++k) {
+            lagrangian_[k] = 0;
+            lWorkspace_[k] = 0;
+         }
 
-      for (int i = 0; i < systemPtr_->mixture().nMonomer(); ++i) {
-         for (int j = 0; j < systemPtr_->mixture().nMonomer(); ++j) {
-            for(int k = 0; k < systemPtr_->basis().nStar(); ++k) {
-               tempDev[i][k] += systemPtr_->interaction().chi(i,j) * systemPtr_->cField(j)[k];
+         for (int i = 0; i < systemPtr_->mixture().nMonomer(); ++i) {
+            for (int j = 0; j < systemPtr_->mixture().nMonomer(); ++j) {
+               for(int k = 0; k < systemPtr_->basis().nStar() - 1; ++k) {
+                  tempDev[i][k] += systemPtr_->interaction().chi(i,j) * systemPtr_->cField(j)[k + 1];
+               }
             }
          }
-      }
 
-      for (int j = 0; j < systemPtr_->mixture().nMonomer(); ++j) {
-         for(int k = 0; k < systemPtr_->basis().nStar(); ++k) {
-            lagrangian_[k] += systemPtr_->wField(j)[k];
-         }
-      }         
+         for (int j = 0; j < systemPtr_->mixture().nMonomer(); ++j) {
+            for(int k = 0; k < systemPtr_->basis().nStar() - 1; ++k) {
+               lagrangian_[k] += systemPtr_->wField(j)[k + 1];
+            }
+         }         
       
-      for(int k = 0; k < systemPtr_->basis().nStar(); ++k) {
-         if(k == 0) {
-            lagrangian_[k] -= systemPtr_->interaction().chi(1,2) * (1 - systemPtr_->cField(0)[k]);
+         for(int k = 0; k < systemPtr_->basis().nStar() - 1; ++k) {
+            lagrangian_[k] -= systemPtr_->interaction().chi(1,2) * (-systemPtr_->cField(0)[k + 1]);
             lagrangian_[k] /= systemPtr_->mixture().nMonomer();
-         } else {
-            lagrangian_[k] -= systemPtr_->interaction().chi(1,2) * (-systemPtr_->cField(0)[k]);
-            lagrangian_[k] /= systemPtr_->mixture().nMonomer();
+         
          }
-      }
     
-      for (int i = 0; i < systemPtr_->mixture().nMonomer(); ++i) {
-         for(int k = 0; k < systemPtr_->basis().nStar(); ++k) {
-            tempDev[i][k] += lagrangian_[k] - systemPtr_->wField(i)[k];
+         for (int i = 0; i < systemPtr_->mixture().nMonomer(); ++i) {
+            for(int k = 0; k < systemPtr_->basis().nStar() - 1; ++k) {
+               tempDev[i][k] += lagrangian_[k] - systemPtr_->wField(i)[k + 1];
+            }
          }
-      }
       
-      devHists_.append(tempDev);
+      } else {
+         for (int i = 0; i < systemPtr_->mixture().nMonomer(); ++i) {
+            for (int j = 0; j < systemPtr_->mixture().nMonomer(); ++j) {
+               for (int k = 0; k < systemPtr_->basis().nStar() - 1; ++k) {
+                  tempDev[i][k] +=( (systemPtr_->interaction().chi(i,j)*systemPtr_->cField(j)[k + 1])
+                                    - (systemPtr_->interaction().idemp(i,j)*systemPtr_->wField(j)[k + 1]) );
+               }
+            }
+         }
 
+      }
+
+      devHists_.append(tempDev);
+         
       if (isFlexible_){
          FArray<double, 6 > tempCp;
          for (int i = 0; i<(systemPtr_->unitCell()).nParameter() ; i++){
@@ -325,6 +328,7 @@ namespace Pspc
          }
          devCpHists_.append(tempCp);
       }
+
    }
 
    template <int D>
@@ -337,7 +341,7 @@ namespace Pspc
       double temp1 = 0;
       double temp2 = 0;
       for ( int i = 0; i < systemPtr_->mixture().nMonomer(); i++) {
-         for ( int j = 0; j < systemPtr_->basis().nStar(); j++) {
+         for ( int j = 0; j < systemPtr_->basis().nStar() - 1; j++) {
             if (temp1 < fabs (devHists_[0][i][j]))
                 temp1 = fabs (devHists_[0][i][j]);
          }
@@ -396,7 +400,7 @@ namespace Pspc
                invertMatrix_(i,j) = 0;
                for (int k = 0; k < nMonomer; ++k) {
                   elm = 0;
-                  for (int l = 0; l < nStar; ++l) {
+                  for (int l = 0; l < nStar - 1; ++l) {
                      elm +=
                             ((devHists_[0][k][l] - devHists_[i+1][k][l])*
                              (devHists_[0][k][l] - devHists_[j+1][k][l]));
@@ -417,7 +421,7 @@ namespace Pspc
 
             vM_[i] = 0;
             for (int j = 0; j < nMonomer; ++j) {
-               for (int k = 0; k < nStar; ++k) {
+               for (int k = 0; k < nStar - 1; ++k) {
                   vM_[i] += ( (devHists_[0][j][k] - devHists_[i+1][j][k]) *
                                devHists_[0][j][k] );
                }
@@ -451,9 +455,9 @@ namespace Pspc
 
       if (itr == 1) {
          for (int i = 0; i < mixture.nMonomer(); ++i) {
-            for (int j = 0; j < systemPtr_->basis().nStar(); ++j) {
-               systemPtr_->wField(i)[j]
-                      = omHists_[0][i][j] + lambda_*devHists_[0][i][j];
+            for (int j = 0; j < systemPtr_->basis().nStar() - 1; ++j) {
+               systemPtr_->wField(i)[j + 1]
+                      = omHists_[0][i][j + 1] + lambda_*devHists_[0][i][j];
             }
          }
 
@@ -471,24 +475,24 @@ namespace Pspc
 
       } else {
          for (int j = 0; j < mixture.nMonomer(); ++j) {
-            for (int k = 0; k < systemPtr_->basis().nStar(); ++k) {
-               wArrays_[j][k] = omHists_[0][j][k];
+            for (int k = 0; k < systemPtr_->basis().nStar() - 1; ++k) {
+               wArrays_[j][k] = omHists_[0][j][k + 1];
                dArrays_[j][k] = devHists_[0][j][k];
             }
          }
          for (int i = 0; i < nHist_; ++i) {
             for (int j = 0; j < mixture.nMonomer(); ++j) {
-               for (int k = 0; k < systemPtr_->basis().nStar(); ++k) {
-                  wArrays_[j][k] += coeffs_[i] * ( omHists_[i+1][j][k] -
-                                                   omHists_[0][j][k] );
+               for (int k = 0; k < systemPtr_->basis().nStar() - 1; ++k) {
+                  wArrays_[j][k] += coeffs_[i] * ( omHists_[i+1][j][k + 1] -
+                                                   omHists_[0][j][k + 1] );
                   dArrays_[j][k] += coeffs_[i] * ( devHists_[i+1][j][k] -
                                                    devHists_[0][j][k] );
                }
             }
          }
          for (int i = 0; i < mixture.nMonomer(); ++i) {
-            for (int j = 0; j < systemPtr_->basis().nStar(); ++j) {
-              systemPtr_->wField(i)[j] = wArrays_[i][j]
+            for (int j = 0; j < systemPtr_->basis().nStar() - 1; ++j) {
+              systemPtr_->wField(i)[j+1] = wArrays_[i][j]
                                          + lambda_ * dArrays_[i][j];
             }
          }
